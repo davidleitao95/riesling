@@ -5,38 +5,35 @@
 
 namespace rl::TOps {
 
-template <int Rank, int FFTRank>
-FFT<Rank, FFTRank>::FFT(InDims const &shape, bool const adj)
+template <int Rank, int FFTRank> FFT<Rank, FFTRank>::FFT(InDims const &shape, bool const adj)
   : Parent(fmt::format("FFT{}", adj ? " Inverse" : ""), shape, shape)
   , adjoint_{adj}
 {
   std::iota(dims_.begin(), dims_.end(), 0);
 }
 
-template <int Rank, int FFTRank>
-FFT<Rank, FFTRank>::FFT(InDims const &shape, Sz<FFTRank> const dims, bool const adj)
+template <int Rank, int FFTRank> FFT<Rank, FFTRank>::FFT(InDims const &shape, Sz<FFTRank> const dims, bool const adj)
   : Parent(fmt::format("FFT{}", adj ? " Inverse" : ""), shape, shape)
   , dims_{dims}
   , adjoint_{adj}
 {
 }
 
-template <int Rank, int FFTRank>
-FFT<Rank, FFTRank>::FFT(InMap x)
+template <int Rank, int FFTRank> FFT<Rank, FFTRank>::FFT(InMap x)
   : Parent("FFT", x.dimensions(), x.dimensions())
 {
   std::iota(dims_.begin(), dims_.end(), Rank - FFTRank);
 }
 
-template <int Rank, int FFTRank> auto FFT<Rank, FFTRank>::inverse() const -> std::shared_ptr<rl::Ops::Op<Cx>>
+template <int Rank, int FFTRank> auto FFT<Rank, FFTRank>::Make(InDims const &shape, bool const adj) -> Ptr
 {
-  return std::make_shared<FFT<Rank, FFTRank>>(this->ishape, !this->adjoint_);
+  return std::make_shared<FFT<Rank, FFTRank>>(shape, adj);
 }
 
-template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::forward(InCMap const x, OutMap y) const
+template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::forward(InCMap x, OutMap y, float const s) const
 {
   auto const time = this->startForward(x, y, false);
-  y = x;
+  y.device(Threads::TensorDevice()) = x * x.constant(s);
   if (adjoint_) {
     rl::FFT::Adjoint(y, dims_);
   } else {
@@ -45,10 +42,10 @@ template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::forward(InCMap const x
   this->finishForward(y, time, false);
 }
 
-template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::adjoint(OutCMap const y, InMap x) const
+template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::adjoint(OutCMap y, InMap x, float const s) const
 {
   auto const time = this->startAdjoint(y, x, false);
-  x = y;
+  x.device(Threads::TensorDevice()) = y * y.constant(s);
   if (adjoint_) {
     rl::FFT::Forward(x, dims_);
   } else {
@@ -57,34 +54,35 @@ template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::adjoint(OutCMap const 
   this->finishAdjoint(x, time, false);
 }
 
-template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::iforward(InCMap const x, OutMap y) const
+template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::iforward(InCMap x, OutMap y, float const s) const
 {
   auto const time = this->startForward(x, y, true);
-  InTensor   tmp = x;
+  InTensor   tmp(x.dimensions());
+  tmp.device(Threads::TensorDevice()) = x * x.constant(s);
   if (adjoint_) {
     rl::FFT::Adjoint(tmp, dims_);
   } else {
     rl::FFT::Forward(tmp, dims_);
   }
-  y += tmp;
   this->finishForward(y, time, true);
 }
 
-template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::iadjoint(OutCMap const y, InMap x) const
+template <int Rank, int FFTRank> void FFT<Rank, FFTRank>::iadjoint(OutCMap y, InMap x, float const s) const
 {
   auto const time = this->startAdjoint(y, x, true);
-  InTensor   tmp = y;
+  InTensor   tmp(y.dimensions());
+  tmp.device(Threads::TensorDevice()) = y * y.constant(s);
   if (adjoint_) {
     rl::FFT::Forward(tmp, dims_);
   } else {
     rl::FFT::Adjoint(tmp, dims_);
   }
-  x += tmp;
   this->finishAdjoint(x, time, true);
 }
 
 template struct FFT<4, 2>;
 template struct FFT<4, 3>;
+template struct FFT<5, 1>;
 template struct FFT<5, 2>;
 template struct FFT<5, 3>;
 

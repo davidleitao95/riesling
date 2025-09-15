@@ -12,14 +12,14 @@ namespace rl {
  */
 struct LSQR
 {
-  using Op = Ops::Op<Cx>;
+  using Op = Ops::Op;
   using Vector = typename Op::Vector;
   using Map = typename Op::Map;
   using CMap = typename Op::CMap;
 
   Op::Ptr A;
-  Op::Ptr Minv = nullptr; // Left Pre-conditioner
-  Op::Ptr Ninv = nullptr; // Right Pre-conditioner
+  Op::Ptr Minv = nullptr; // Left Pre-conditioner, will call ->inverse()
+  Op::Ptr Ninv = nullptr; // Right Pre-conditioner, will call ->inverse()
   Index   iterLimit = 4;
   float   aTol = 1.e-6f;
   float   bTol = 1.e-6f;
@@ -28,7 +28,7 @@ struct LSQR
   std::function<void(Index const iter, Vector const &)> debug = nullptr;
 
   auto run(Vector const &b, float const λ = 0.f, Vector const &x0 = Vector()) const -> Vector;
-  auto run(CMap const b, float const λ = 0.f, CMap x0 = CMap(nullptr, 0)) const -> Vector;
+  auto run(CMap b, float const λ = 0.f, CMap x0 = CMap(nullptr, 0)) const -> Vector;
 };
 
 } // namespace rl

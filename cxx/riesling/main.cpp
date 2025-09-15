@@ -1,5 +1,5 @@
-#include "rl/log/log.hpp"
 #include "args.hpp"
+#include "rl/log/log.hpp"
 
 using namespace rl;
 
@@ -10,6 +10,7 @@ using namespace rl;
 int main(int const argc, char const *const argv[])
 {
   args::ArgumentParser parser("RIESLING");
+  args::GlobalOptions  globals(parser, global_group);
 
   args::Group recon(parser, "RECON");
   COMMAND(recon, recon_lsq, "recon-lsq", "Least-squares (iterative) recon");
@@ -27,7 +28,8 @@ int main(int const argc, char const *const argv[])
   COMMAND(data, downsamp2, "downsamp2", "Downsample 2D non-cartesian data");
   COMMAND(data, move, "move", "Shift and rotate data within FOV");
   COMMAND(data, merge, "merge", "Merge non-cartesian data");
-  COMMAND(data, noisify, "noisify", "Add noise to non-cartesian data");
+  COMMAND(data, norm, "norm", "Calculate the norm of a dataset");
+  COMMAND(data, noisify, "noisify", "Add noise to dataset");
   COMMAND(data, real, "real", "Make complex images real valued");
   COMMAND(data, slice_nc, "slice", "Slice non-cartesian data");
   COMMAND(data, slice_img, "slice-img", "Slice images");
@@ -42,6 +44,7 @@ int main(int const argc, char const *const argv[])
   COMMAND(basis, bernstein, "basis-bernstein", "Bernstein Polynomials");
   COMMAND(basis, blend, "basis-blend", "Blend basis images");
   COMMAND(basis, basis_concat, "basis-concat", "Concatenate bases");
+  COMMAND(basis, basis_decay, "basis-decay", "Simple T2 decay");
   COMMAND(basis, echoes, "basis-echoes", "Split echoes from sample dimension");
   COMMAND(basis, frames, "basis-frames", "Create a time-frame basis");
   COMMAND(basis, basis_fourier, "basis-fourier", "Basis of Fourier harmonics");
@@ -66,9 +69,10 @@ int main(int const argc, char const *const argv[])
   COMMAND(op, wavelets, "op-wavelets", "Apply wavelet transform");
 
   args::Group util(parser, "UTIL");
-  COMMAND(util, autofocus, "autofocus", "Apply Noll's autofocussing");
+  // COMMAND(util, autofocus, "autofocus", "Apply Noll's autofocussing");
   COMMAND(util, denoise, "denoise", "Denoise reconstructed images");
-  // COMMAND(util, eig, "eig", "Calculate largest eigenvalue / vector");
+  COMMAND(util, eig, "eig", "Calculate largest eigenvalue / vector");
+  COMMAND(util, eig2, "eig2", "2D Calculate largest eigenvalue / vector");
   COMMAND(util, filter, "filter", "Apply Tukey filter to image");
   COMMAND(util, log, "log", "Print log to stdout");
   COMMAND(util, mask, "mask", "Generate a mask from an image");
@@ -77,13 +81,12 @@ int main(int const argc, char const *const argv[])
   COMMAND(util, psf, "psf", "Estimate Point Spread Function");
   COMMAND(util, resamp, "resamp", "Resample images to desired resolution");
   COMMAND(util, rss, "rss", "Take RSS across a dimension");
-  // COMMAND(util, rovir, "rovir", "Calculate ROVIR compression matrix");
+  COMMAND(util, rovir, "rovir", "Calculate ROVIR compression matrix");
 #ifdef BUILD_MONTAGE
   COMMAND(util, montage, "montage", "Make beautiful output images");
 #endif
   COMMAND(util, version, "version", "Print version number");
 
-  args::GlobalOptions globals(parser, global_group);
   try {
     parser.ParseCLI(argc, argv);
     Log::End();

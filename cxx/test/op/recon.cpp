@@ -13,7 +13,7 @@
 using namespace rl;
 using namespace Catch;
 
-TEST_CASE("Recon", "[recon]")
+TEST_CASE("Recon", "[op]")
 {
   // Log::SetDisplayLevel(Log::Display::High);
   Index const M = GENERATE(7); //, 15, 16);
@@ -29,9 +29,9 @@ TEST_CASE("Recon", "[recon]")
   Basis            basis;
 
   float const       osamp = GENERATE(1.3f);
-  auto              nufft = TOps::NUFFT<3>::Make(GridOpts<3>{.osamp = osamp}, traj, nC, &basis);
+  auto              nufft = TOps::MakeNUFFT<3>(GridOpts<3>{.osamp = osamp}, traj, nC, &basis);
 
-  Cx5 senseMaps(AddBack(traj.matrix(), nC, 1));
+  Cx5 senseMaps(AddBack(traj.matrix(), 1, nC));
   senseMaps.setConstant(std::sqrt(1. / nC));
   auto sense = TOps::MakeSENSE(senseMaps, 1);
   auto recon = TOps::MakeCompose(sense, nufft);
@@ -49,7 +49,7 @@ TEST_CASE("Recon", "[recon]")
   CHECK(Norm<false>(ks) == Approx(Norm<false>(img)).margin(2.e-1f));
 }
 
-TEST_CASE("ReconLowmem", "[recon]")
+TEST_CASE("ReconLowmem", "[op]")
 {
   // Log::SetDisplayLevel(Log::Display::High);
   Index const M = GENERATE(8); //, 15, 16);
@@ -64,7 +64,7 @@ TEST_CASE("ReconLowmem", "[recon]")
   Trajectory const traj(points, matrix);
   Basis            basis;
 
-  Cx5 sKern(AddBack(traj.matrix(), nC, 1));
+  Cx5 sKern(AddBack(traj.matrix(), 1, nC));
   sKern.setConstant(std::sqrt(1. / nC));
   FFT::Forward(sKern, Sz3{0, 1, 2});
   auto recon = TOps::NUFFTLowmem<3>::Make(GridOpts<3>(), traj, sKern, &basis);

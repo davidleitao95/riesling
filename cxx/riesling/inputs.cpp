@@ -14,8 +14,10 @@ using namespace rl;
 template <int ND> CoreArgs<ND>::CoreArgs(args::Subparser &parser)
   : iname(parser, "FILE", "Input HD5 file")
   , oname(parser, "FILE", "Output HD5 file")
-  , matrix(parser, "M", "Override matrix size", {"matrix", 'm'}, Sz<ND>())
+  , dset(parser, "D", "Dataset name", {"dset", 'd'}, HD5::Keys::Data)
   , basisFile(parser, "B", "Read basis from file", {"basis", 'b'})
+  , matrix(parser, "M", "Override matrix size", {"matrix", 'm'}, Sz<ND>())
+  , residual(parser, "R", "Output k-space residual", {"resid", 'r'})
 {
 }
 
@@ -23,14 +25,16 @@ template struct CoreArgs<2>;
 template struct CoreArgs<3>;
 
 template <int ND> GridArgs<ND>::GridArgs(args::Subparser &parser)
-  : fov(parser, "FOV", "Grid FoV in mm (x,y,z)", {"fov"}, Eigen::Array<float, ND, 1>::Zero())
-  , osamp(parser, "O", "Grid oversampling factor (1.3)", {"osamp"}, 1.3f)
+  : fov(parser, "FOV", "Grid FoV in mm (x,y,z)", {"fov", 'f'}, Eigen::Array<float, ND, 1>::Zero())
+  , osamp(parser, "O", "Grid oversampling factor (1.3)", {"osamp", 'o'}, 1.3f)
+  , tophat(parser, "T", "Use a top hat (NN) kernel", {"tophat"})
+  , kW(parser, "W", "ExpSemi kernel width", {"kwidth"}, 4)
 {
 }
 
 template <int ND> auto GridArgs<ND>::Get() -> rl::GridOpts<ND>
 {
-  return typename rl::GridOpts<ND>{.fov = fov.Get(), .osamp = osamp.Get()};
+  return typename rl::GridOpts<ND>{.fov = fov.Get(), .osamp = osamp.Get(), .tophat = tophat.Get(), .kW = kW.Get()};
 }
 
 template struct GridArgs<2>;
@@ -45,7 +49,7 @@ ReconArgs::ReconArgs(args::Subparser &parser)
 auto ReconArgs::Get() -> rl::ReconOpts { return rl::ReconOpts{.decant = decant.Get(), .lowmem = lowmem.Get()}; }
 
 PreconArgs::PreconArgs(args::Subparser &parser)
-  : type(parser, "P", "Pre-conditioner (none/single/multi/filename)", {"precon"}, "single")
+  : type(parser, "P", "Pre-conditioner (none/single/multi/filename)", {"precon", 'p'}, "single")
   , λ(parser, "BIAS", "Pre-conditioner regularization (1)", {"precon-lambda"}, 1.e-3f)
 {
 }
@@ -53,7 +57,7 @@ PreconArgs::PreconArgs(args::Subparser &parser)
 auto PreconArgs::Get() -> rl::PreconOpts { return rl::PreconOpts{.type = type.Get(), .λ = λ.Get()}; }
 
 LSMRArgs::LSMRArgs(args::Subparser &parser)
-  : its(parser, "N", "Max iterations (4)", {'i', "max-its"}, 4)
+  : its(parser, "N", "Max iterations (4)", {"max-its", 'i'}, 4)
   , atol(parser, "A", "Tolerance on A (1e-6)", {"atol"}, 1.e-6f)
   , btol(parser, "B", "Tolerance on b (1e-6)", {"btol"}, 1.e-6f)
   , ctol(parser, "C", "Tolerance on cond(A) (1e-6)", {"ctol"}, 1.e-6f)
@@ -66,9 +70,23 @@ auto LSMRArgs::Get() -> rl::LSMR::Opts
   return rl::LSMR::Opts{.imax = its.Get(), .aTol = atol.Get(), .bTol = btol.Get(), .cTol = ctol.Get(), .λ = λ.Get()};
 }
 
+PDHGArgs::PDHGArgs(args::Subparser &parser)
+  : adaptive(parser, "A", "Adaptive step sizes", {"adaptive"})
+  , lad(parser, "L", "Least Absolute Deviations, PDHG only", {"lad", 'l'})
+  , its(parser, "N", "Max iterations (4)", {"max-its", 'i'}, 32)
+  , tol(parser, "B", "PDHG residual/Δ tolerance (1e-2)", {"pdhg-tol", 't'}, 1.e-2f)
+  , λE(parser, "λE", "Max Eigenvalue of encoding operator (1)", {"lambda-E", 'e'}, 1.f)
+{
+}
+
+auto PDHGArgs::Get() -> rl::PDHG::Opts
+{
+  return rl::PDHG::Opts{.adaptive = adaptive, .lad = lad, .imax = its.Get(), .tol = tol.Get(), .λE = λE.Get()};
+}
+
 ADMMArgs::ADMMArgs(args::Subparser &parser)
   : in_its0(parser, "ITS", "Initial inner iterations (64)", {"max-its0"}, 64)
-  , in_its1(parser, "ITS", "Subsequent inner iterations (64)", {"max-its"}, 64)
+  , in_its1(parser, "ITS", "Subsequent inner iterations (64)", {"max-its1"}, 64)
   , atol(parser, "A", "Tolerance on A", {"atol"}, 1.e-6f)
   , btol(parser, "B", "Tolerance on b", {"btol"}, 1.e-6f)
   , ctol(parser, "C", "Tolerance on cond(A)", {"ctol"}, 1.e-6f)
@@ -97,22 +115,28 @@ auto ADMMArgs::Get() -> rl::ADMM::Opts
                         .ɑ = ɑ.Get()};
 }
 
-template <int ND>
-SENSEArgs<ND>::SENSEArgs(args::Subparser &parser)
+template <int ND> SENSEArgs<ND>::SENSEArgs(args::Subparser &parser)
   : type(parser, "T", "SENSE type (auto/file.h5)", {"sense", 's'}, "auto")
   , tp(parser, "T", "SENSE calibration timepoint (first)", {"sense-tp"}, 0)
   , kWidth(parser, "K", "SENSE kernel width (10)", {"sense-width"}, 10)
+  , its(parser, "I", "SENSE recon max iterations (8)", {"sense-its"}, 8)
   , res(parser, "R", "SENSE calibration res (6,6,6)", {"sense-res"}, Eigen::Array<float, ND, 1>::Constant(6.f))
   , l(parser, "L", "SENSE Sobolev parameter (4)", {"sense-l"}, 4.f)
   , λ(parser, "L", "SENSE Regularization (1e-4)", {"sense-lambda"}, 1.e-4f)
+  , renorm(parser, "N", "SENSE Renormalization (RSS/none)", {"sense-renorm"}, SENSE::NormMap, SENSE::Normalization::RSS)
 {
 }
 
-template <int ND>
-auto SENSEArgs<ND>::Get() -> rl::SENSE::Opts<ND>
+template <int ND> auto SENSEArgs<ND>::Get() -> rl::SENSE::Opts<ND>
 {
-  return rl::SENSE::Opts<ND>{
-    .type = type.Get(), .tp = tp.Get(), .kWidth = kWidth.Get(), .res = res.Get(), .l = l.Get(), .λ = λ.Get()};
+  return rl::SENSE::Opts<ND>{.type = type.Get(),
+                             .tp = tp.Get(),
+                             .kWidth = kWidth.Get(),
+                             .its = its.Get(),
+                             .res = res.Get(),
+                             .l = l.Get(),
+                             .λ = λ.Get(),
+                             .renorm = renorm.Get()};
 }
 
 template struct SENSEArgs<2>;

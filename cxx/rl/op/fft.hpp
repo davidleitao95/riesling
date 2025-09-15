@@ -8,22 +8,23 @@
 
 namespace rl::TOps {
 
-template <int Rank, int FFTRank> struct FFT final : TOp<Cx, Rank, Rank>
+template <int Rank, int FFTRank> struct FFT final : TOp<Rank, Rank>
 {
-  TOP_INHERIT(Cx, Rank, Rank)
+  TOP_INHERIT(Rank, Rank)
 
   FFT(InDims const &shape, bool const adjoint = false);
   FFT(InDims const &shape, Sz<FFTRank> const dims, bool const adjoint = false);
   FFT(InMap x);
-  auto inverse() const -> std::shared_ptr<rl::Ops::Op<Cx>> final;
 
   using Parent::adjoint;
   using Parent::forward;
+  using Ptr = std::shared_ptr<FFT<Rank, FFTRank>>;
+  static auto Make(InDims const &shape, bool const adjoint = false) -> Ptr;
 
-  void forward(InCMap const x, OutMap y) const;
-  void adjoint(OutCMap const y, InMap x) const;
-  void iforward(InCMap const x, OutMap y) const;
-  void iadjoint(OutCMap const y, InMap x) const;
+  void forward(InCMap x, OutMap y, float const s) const;
+  void adjoint(OutCMap y, InMap x, float const s) const;
+  void iforward(InCMap x, OutMap y, float const s) const;
+  void iadjoint(OutCMap y, InMap x, float const s) const;
 
 private:
   Sz<FFTRank> dims_;

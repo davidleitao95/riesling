@@ -7,7 +7,7 @@ namespace rl {
 
 struct ADMM
 {
-  using Op = Ops::Op<Cx>;
+  using Op = Ops::Op;
   using Vector = typename Op::Vector;
   using Map = typename Op::Map;
   using CMap = typename Op::CMap;
@@ -23,7 +23,7 @@ struct ADMM
     float cTol = 1.e-6f;
 
     Index outerLimit; // Number of outer iterations
-    float ε;          // Combined primal/dual tolerance parameter
+    float ε;          // Combined apply/dual tolerance parameter
 
     float ρ;       // Penalty parameter
     bool  balance; // Apply residual balancing scheme
@@ -42,7 +42,7 @@ struct ADMM
   DebugZ                   debug_z = nullptr;
 
   auto run(Vector const &b) const -> Vector;
-  auto run(CMap const b) const -> Vector;
+  auto run(CMap b) const -> Vector;
 };
 
 } // namespace rl

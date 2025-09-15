@@ -33,28 +33,28 @@ template <typename S, int Rank> struct Shuffle final : TOp<S, Rank, Rank>
     Log::Print("Shuffle", "Input {} Output {}", ishuff, oshuff);
   }
 
-  void forward(InCMap const x, OutMap y) const
+  void forward(InCMap x, OutMap y) const
   {
     auto const time = this->startForward(x, y, false);
     y.device(Threads::TensorDevice()) = x.shuffle(ishuff);
     this->finishForward(y, time, false);
   }
 
-  void adjoint(OutCMap const y, InMap x) const
+  void adjoint(OutCMap y, InMap x) const
   {
     auto const                 time = this->startAdjoint(y, x, false);
     x.device(Threads::TensorDevice()) = y.shuffle(oshuff);
     this->finishAdjoint(x, time, false);
   }
 
-  void iforward(InCMap const x, OutMap y) const
+  void iforward(InCMap x, OutMap y) const
   {
     auto const                time = this->startForward(x, y, true);
     y.device(Threads::TensorDevice()) += x.shuffle(ishuff);
     this->finishForward(y, time, true);
   }
 
-  void iadjoint(OutCMap const y, InMap x) const
+  void iadjoint(OutCMap y, InMap x) const
   {
     auto const                 time = this->startAdjoint(y, x, true);
     x.device(Threads::TensorDevice()) += y.shuffle(oshuff);
@@ -79,7 +79,7 @@ template <typename Op> auto MakeShuffleOutput(std::shared_ptr<Op> op, Sz<Op::Out
 }
 
 template <typename Op> auto MakeShuffleInput(std::shared_ptr<Op> op, Sz<Op::InRank> const shuff)
-  -> TOps::TOp<Cx, Op::InRank, Op::OutRank>::Ptr
+  -> TOps::TOp<Op::InRank, Op::OutRank>::Ptr
 {
   auto s = std::make_shared<Shuffle<Cx, Op::InRank>>(op->ishape, shuff);
   return MakeCompose(s, op);

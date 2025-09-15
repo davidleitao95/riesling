@@ -8,8 +8,11 @@ if(${BUILD_TESTS})
         fft3.cpp
         io.cpp
         kernel.cpp
+        patches.cpp
         precon.cpp
+        prox.cpp
         op/fft.cpp
+        # op/grad.cpp
         op/grid.cpp
         # op/ndft.cpp
         op/nufft.cpp

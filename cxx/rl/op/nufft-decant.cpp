@@ -1,6 +1,6 @@
 #include "nufft-decant.hpp"
 
-#include "../apodize.hpp"
+#include "apodize.hpp"
 #include "../fft.hpp"
 #include "../log/log.hpp"
 #include "top-impl.hpp"
@@ -14,28 +14,13 @@ NUFFTDecant<ND, KF>::NUFFTDecant(GridOpts<ND> const    &opts,
                                  Basis::CPtr            basis)
   : Parent("NUFFTDecant")
   , gridder(opts, traj, skern, basis)
+  , apo{Concatenate(traj.matrixForFOV(opts.fov), LastN<1>(gridder.ishape)), gridder.ishape, opts.osamp}
   , workspace{gridder.ishape}
 {
-  ishape = Concatenate(traj.matrixForFOV(opts.fov), LastN<1>(gridder.ishape));
+  ishape = apo.ishape;
   oshape = gridder.oshape;
   std::iota(fftDims.begin(), fftDims.end(), 0);
   Log::Print("NUFFTDecant", "ishape {} oshape {} grid {}", ishape, oshape, gridder.ishape);
-
-  // Calculate apodization correction
-  auto apo_shape = ishape;
-  apoBrd_.fill(1);
-  apo_shape[ND] = 1;
-  apoBrd_[ND] = ishape[ND];
-  apo_ = Apodize<ND, KF>(FirstN<ND>(ishape), FirstN<ND>(gridder.ishape), opts.osamp).reshape(apo_shape); // Padding stuff
-  Sz<InRank> padRight;
-  padLeft_.fill(0);
-  padRight.fill(0);
-  for (int ii = 0; ii < ND; ii++) {
-    padLeft_[ii] = (gridder.ishape[ii] - ishape[ii] + 1) / 2;
-    padRight[ii] = (gridder.ishape[ii] - ishape[ii]) / 2;
-  }
-  std::transform(padLeft_.cbegin(), padLeft_.cend(), padRight.cbegin(), paddings_.begin(),
-                 [](Index left, Index right) { return std::make_pair(left, right); });
 }
 
 template <int ND, typename KF>
@@ -47,43 +32,47 @@ auto NUFFTDecant<ND, KF>::Make(GridOpts<ND> const    &opts,
   return std::make_shared<NUFFTDecant<ND>>(opts, traj, skern, basis);
 }
 
-template <int ND, typename KF> void NUFFTDecant<ND, KF>::forward(InCMap const x, OutMap y) const
+template <int ND, typename KF> void NUFFTDecant<ND, KF>::forward(InCMap x, OutMap y, float const s) const
 {
   auto const time = this->startForward(x, y, false);
   InMap      wsm(workspace.data(), gridder.ishape);
-  wsm.device(Threads::TensorDevice()) = (x * apo_.broadcast(apoBrd_)).pad(paddings_);
-  FFT::Forward(workspace, fftDims);
-  gridder.forward(workspace, y);
+  InCMap     wscm(workspace.data(), gridder.ishape);
+  apo.forward(x, wsm, s);
+  FFT::Forward(wsm, fftDims);
+  gridder.forward(wscm, y);
   this->finishForward(y, time, false);
 }
 
-template <int ND, typename KF> void NUFFTDecant<ND, KF>::adjoint(OutCMap const y, InMap x) const
+template <int ND, typename KF> void NUFFTDecant<ND, KF>::adjoint(OutCMap y, InMap x, float const s) const
 {
   auto const time = this->startAdjoint(y, x, false);
   InMap      wsm(workspace.data(), gridder.ishape);
+  InCMap     wscm(workspace.data(), gridder.ishape);
   gridder.adjoint(y, wsm);
-  FFT::Adjoint(workspace, fftDims);
-  x.device(Threads::TensorDevice()) = workspace.slice(padLeft_, ishape) * apo_.broadcast(apoBrd_);
+  FFT::Adjoint(wsm, fftDims);
+  apo.adjoint(wscm, x, s);
   this->finishAdjoint(x, time, false);
 }
 
-template <int ND, typename KF> void NUFFTDecant<ND, KF>::iforward(InCMap const x, OutMap y) const
+template <int ND, typename KF> void NUFFTDecant<ND, KF>::iforward(InCMap x, OutMap y, float const s) const
 {
   auto const time = this->startForward(x, y, true);
   InMap      wsm(workspace.data(), gridder.ishape);
-  wsm.device(Threads::TensorDevice()) = (x * apo_.broadcast(apoBrd_)).pad(paddings_);
-  FFT::Forward(workspace, fftDims);
-  gridder.iforward(workspace, y);
+  InCMap     wscm(workspace.data(), gridder.ishape);
+  apo.forward(x, wsm);
+  FFT::Forward(wsm, fftDims);
+  gridder.iforward(wscm, y, s);
   this->finishForward(y, time, true);
 }
 
-template <int ND, typename KF> void NUFFTDecant<ND, KF>::iadjoint(OutCMap const y, InMap x) const
+template <int ND, typename KF> void NUFFTDecant<ND, KF>::iadjoint(OutCMap y, InMap x, float const s) const
 {
   auto const time = this->startAdjoint(y, x, true);
   InMap      wsm(workspace.data(), gridder.ishape);
+  InCMap     wscm(workspace.data(), gridder.ishape);
   gridder.adjoint(y, wsm);
   FFT::Adjoint(workspace, fftDims);
-  x.device(Threads::TensorDevice()) += workspace.slice(padLeft_, ishape) * apo_.broadcast(apoBrd_);
+  apo.iadjoint(wscm, x);
   this->finishAdjoint(x, time, true);
 }
 

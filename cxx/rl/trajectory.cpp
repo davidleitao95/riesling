@@ -16,25 +16,24 @@ constexpr Eigen::IndexPairList<Eigen::type2indexpair<0, 0>> matMul;
 template <int ND> auto GuessMatrix(Re3 const &points) -> Sz<ND>
 {
   if (points.dimension(0) != ND) { throw Log::Failure("Traj", "Incorrect number of co-ordinates for GuessMatrix"); }
-  Re1 max(ND);
-  max.setZero();
+  std::array<float, ND> max;
+  std::fill_n(max.begin(), ND, 0.f);
   for (Index ii = 0; ii < points.dimension(1); ii++) {
     for (Index ij = 0; ij < points.dimension(2); ij++) {
       for (Index ic = 0; ic < ND; ic++) {
         auto const a = std::fabs(points(ic, ii, ij));
-        if (a > max(ic)) { max(ic) = a; }
+        if (a > max[ic]) { max[ic] = a; }
       }
     }
   }
   Sz<ND> mat;
   for (Index ii = 0; ii < ND; ii++) {
-    mat[ii] = std::max((Index)(std::ceil(max(ii)) * 2), 1L);
+    mat[ii] = std::max((Index)(std::ceil(max[ii]) * 2), 1L);
   }
   return mat;
 }
 
-template <int ND>
-TrajectoryN<ND>::TrajectoryN(Re3 const &points, Array const voxel_size)
+template <int ND> TrajectoryN<ND>::TrajectoryN(Re3 const &points, Array const voxel_size)
   : points_{points}
   , matrix_{GuessMatrix<ND>(points_)}
   , voxel_size_{voxel_size}
@@ -42,8 +41,7 @@ TrajectoryN<ND>::TrajectoryN(Re3 const &points, Array const voxel_size)
   init();
 }
 
-template <int ND>
-TrajectoryN<ND>::TrajectoryN(Re3 const &points, SzN const matrix, Array const voxel_size)
+template <int ND> TrajectoryN<ND>::TrajectoryN(Re3 const &points, SzN const matrix, Array const voxel_size)
   : points_{points}
   , matrix_{matrix}
   , voxel_size_{voxel_size}
@@ -51,17 +49,27 @@ TrajectoryN<ND>::TrajectoryN(Re3 const &points, SzN const matrix, Array const vo
   init();
 }
 
-template <int ND> TrajectoryN<ND>::TrajectoryN(HD5::Reader &file, Array const voxel_size, SzN const matrix_size)
+template <int ND> TrajectoryN<ND>::TrajectoryN(HD5::Reader &file, Array const voxel_size, SzN const mat)
 {
   points_ = file.readTensor<Re3>(HD5::Keys::Trajectory);
-  if (std::all_of(matrix_size.cbegin(), matrix_size.cend(), [](Index ii) { return ii > 0; })) {
-    matrix_ = matrix_size;
-  } else if (file.exists(HD5::Keys::Trajectory, "matrix")) {
+  voxel_size_ = voxel_size;
+  if (points_.dimension(0) != ND) {
+    throw(Log::Failure("Traj", "Trajectory on disk was {}D, expected {}D", points_.dimension(0), ND));
+  }
+  if (file.exists(HD5::Keys::Trajectory, "matrix")) {
     matrix_ = file.readAttributeShape<ND>(HD5::Keys::Trajectory, "matrix");
   } else {
     matrix_ = GuessMatrix<ND>(points_);
   }
-  voxel_size_ = voxel_size;
+  /* If the matrix size is overridden, adjust the voxel size as well*/
+  if (std::all_of(mat.cbegin(), mat.cend(), [](Index ii) { return ii > 0; })) {
+    Array matO, matN;
+    std::copy_n(matrix_.begin(), ND, matO.begin());
+    std::copy_n(mat.begin(), ND, matN.begin());
+    Array ratio = matO / matN;
+    voxel_size_ = voxel_size * ratio;
+    matrix_ = mat;
+  } 
   init();
 }
 
@@ -125,6 +133,7 @@ template <int ND> auto TrajectoryN<ND>::matrix() const -> SzN { return matrix_; 
 template <int ND> auto TrajectoryN<ND>::matrixForFOV(Array const fov) const -> SzN
 {
   if (flux::all(fov, [](float f) { return f == 0.f; })) {
+    Log::Print("Traj", "Nominal FOV, matrix {}", matrix_);
     return matrix_;
   } else {
     SzN matrix;
@@ -166,7 +175,7 @@ void TrajectoryN<ND>::shiftInFOV(Eigen::Vector3f const shift, Index const tst, I
     delta[ii] = shift[ii] / (voxel_size_[ii] * matrix_[ii]);
   }
 
-  Log::Debug("Traj", "Traces {}-{} FOV shift {} mm, fraction {}", tst, tst + tsz - 1, fmt::streamed(shift.transpose()),
+  Log::Print("Traj", "Traces {}-{} FOV shift {} mm, fraction {}", tst, tst + tsz - 1, fmt::streamed(shift.transpose()),
              fmt::streamed(delta));
   Sz5 const dshape = data.dimensions();
   Sz5 const rshape = Sz5{1, dshape[1], tsz, 1, 1};
@@ -186,13 +195,12 @@ template <int ND> void TrajectoryN<ND>::moveInFOV(Eigen::Matrix<float, ND, ND> c
   moveInFOV(R, shift, 0, data.dimension(2), data);
 }
 
-template <int ND>
-void TrajectoryN<ND>::moveInFOV(
+template <int ND> void TrajectoryN<ND>::moveInFOV(
   Eigen::Matrix<float, ND, ND> const R, Eigen::Vector3f const s, Index const tst, Index const tsz, Cx5 &data)
 {
   if (tst + tsz > nTraces()) { throw Log::Failure("Traj", "Max trace {} exceeded number of traces {}", tst + tsz, nTraces()); }
-  Re2CMap const Rt(R.data(), Sz2{ND, ND});
-  auto          p = points_.slice(Sz3{0, 0, tst}, Sz3{ND, nSamples(), tsz});
+  Re2CMap Rt(R.data(), Sz2{ND, ND});
+  auto    p = points_.slice(Sz3{0, 0, tst}, Sz3{ND, nSamples(), tsz});
   Log::Debug("Traj", "Rotating traces {}-{}", tst, tst + tsz - 1);
   p.device(Threads::TensorDevice()) = Re3(Rt.contract(p, matMul));
   shiftInFOV(s, tst, tsz, data);
@@ -200,7 +208,7 @@ void TrajectoryN<ND>::moveInFOV(
 
 template <int ND> auto TrajectoryN<ND>::points() const -> Re3 const & { return points_; }
 
-template <int ND> auto TrajectoryN<ND>::point(int16_t const read, int32_t const spoke) const -> Eigen::Vector<float, ND>
+template <int ND> auto TrajectoryN<ND>::point(int32_t const read, int32_t const spoke) const -> Eigen::Vector<float, ND>
 {
   Re1 const                p = points_.template chip<2>(spoke).template chip<1>(read);
   Eigen::Vector<float, ND> pv;
@@ -228,7 +236,7 @@ template <int ND> void TrajectoryN<ND>::downsample(Array const tgtSize, bool con
       thresh(ii) = matrix_[ii] * ratio / 2.f;
     }
   }
-  Log::Print("Traj", "Downsampling to {} voxels, k-space threshold {}", tgtSize, fmt::streamed(thresh));
+  Log::Print("Traj", "Downsample {} voxel-size, {} matrix, k-space threshold {}", voxel_size_, matrix_, fmt::streamed(thresh));
 
   for (Index it = 0; it < nTraces(); it++) {
     for (Index is = 0; is < nSamples(); is++) {
@@ -264,6 +272,23 @@ auto FindFirstValid(Re3 const &traj) -> ST
   }
 }
 
+auto FindFirstInvalidSample(Re3 const &traj) -> ST
+{
+  Index s = traj.dimension(1), t = traj.dimension(2);
+  for (Index it = 0; it < traj.dimension(2); it++) {
+    for (Index is = 0; is < traj.dimension(1); is++) {
+      if (!std::isfinite(Sum(traj.chip<2>(it).chip<1>(is)))) {
+        s = std::min(s, is);
+      }
+    }
+  }
+  if (t < 0) {
+    throw Log::Failure("traj", "No valid trajectory points found");
+  } else {
+    return {s, t};
+  }
+}
+
 auto FindLastValid(Re3 const &traj) -> ST
 {
   Index s = -1, t = -1;
@@ -282,10 +307,10 @@ auto FindLastValid(Re3 const &traj) -> ST
   }
 }
 
-template <int ND> template <int D> auto TrajectoryN<ND>::trim(CxNCMap<D> const ks) -> CxN<D>
+template <int ND> template <int D> auto TrajectoryN<ND>::trim(CxNCMap<D> const ks, bool const aggressive) -> CxN<D>
 {
   auto const min = FindFirstValid(points_);
-  auto const max = FindLastValid(points_);
+  auto const max = aggressive ? FindFirstInvalidSample(points_) : FindLastValid(points_);
   Log::Print("Traj", "Retaining samples {}-{} traces {}-{}", min.s, max.s, min.t, max.t);
   Index const nS = max.s - min.s + 1;
   Index const nT = max.t - min.t + 1;
@@ -293,15 +318,9 @@ template <int ND> template <int D> auto TrajectoryN<ND>::trim(CxNCMap<D> const k
   return ks.slice(AddFront(Sz<D - 3>{}, 0, min.s, min.t), AddFront(LastN<D - 3>(ks.dimensions()), ks.dimension(0), nS, nT));
 }
 
-template <int ND> template <int D> auto TrajectoryN<ND>::trim(CxN<D> const &ks) -> CxN<D>
+template <int ND> template <int D> auto TrajectoryN<ND>::trim(CxN<D> const &ks, bool const aggressive) -> CxN<D>
 {
-  auto const min = FindFirstValid(points_);
-  auto const max = FindLastValid(points_);
-  Log::Print("Traj", "Retaining samples {}-{} traces {}-{}", min.s, max.s, min.t, max.t);
-  Index const nS = max.s - min.s + 1;
-  Index const nT = max.t - min.t + 1;
-  points_ = Re3(points_.slice(Sz3{0, min.s, min.t}, Sz3{ND, nS, nT}));
-  return ks.slice(AddFront(Sz<D - 3>{}, 0, min.s, min.t), AddFront(LastN<D - 3>(ks.dimensions()), ks.dimension(0), nS, nT));
+  return trim(CxNCMap<D>(ks.data(), ks.dimensions()), aggressive);
 }
 
 template <int ND> inline auto Sz2Array(Sz<ND> const &sz) -> Eigen::Array<float, ND, 1>
@@ -313,8 +332,8 @@ template <int ND> inline auto Sz2Array(Sz<ND> const &sz) -> Eigen::Array<float, 
   return a;
 }
 
-template <int ND>
-inline auto SubgridIndex(Eigen::Array<Index, ND, 1> const &sg, Eigen::Array<Index, ND, 1> const &ngrids) -> Index
+template <int ND> inline auto SubgridIndex(Eigen::Array<Index, ND, 1> const &sg, Eigen::Array<Index, ND, 1> const &ngrids)
+  -> Index
 {
   Index ind = 0;
   Index stride = 1;
@@ -349,7 +368,7 @@ auto TrajectoryN<ND>::toCoordLists(Sz<ND> const &oshape, Index const kW, Index c
 
   std::vector<CoordList> subs(nTotal);
   for (int32_t it = 0; it < this->nTraces(); it++) {
-    for (int16_t is = 0; is < this->nSamples(); is++) {
+    for (int32_t is = 0; is < this->nSamples(); is++) {
       Arrayf const p = this->point(is, it) * (conj ? -1.f : 1.f);
       if ((p != p).any()) {
         invalids++;
@@ -370,7 +389,7 @@ auto TrajectoryN<ND>::toCoordLists(Sz<ND> const &oshape, Index const kW, Index c
       valid++;
     }
   }
-  Log::Print("Traj", "Ignored {} invalid trajectory points, {} remaing", invalids, valid);
+  Log::Print("Traj", "Ignored {} invalid trajectory points, {} remain", invalids, valid);
   auto const eraseCount = std::erase_if(subs, [](auto const &s) { return s.coords.empty(); });
   Log::Debug("Traj", "Removed {} empty subgrids, {} remaining", eraseCount, subs.size());
   Log::Debug("Traj", "Sorting subgrids");
@@ -398,20 +417,20 @@ template struct TrajectoryN<1>;
 template struct TrajectoryN<2>;
 template struct TrajectoryN<3>;
 
-template auto TrajectoryN<2>::trim(Cx3CMap const) -> Cx3;
-template auto TrajectoryN<2>::trim(Cx4CMap const) -> Cx4;
-template auto TrajectoryN<2>::trim(Cx5CMap const) -> Cx5;
+template auto TrajectoryN<2>::trim(Cx3CMap, bool const) -> Cx3;
+template auto TrajectoryN<2>::trim(Cx4CMap, bool const) -> Cx4;
+template auto TrajectoryN<2>::trim(Cx5CMap, bool const) -> Cx5;
 
-template auto TrajectoryN<2>::trim(Cx3 const &) -> Cx3;
-template auto TrajectoryN<2>::trim(Cx4 const &) -> Cx4;
-template auto TrajectoryN<2>::trim(Cx5 const &) -> Cx5;
+template auto TrajectoryN<2>::trim(Cx3 const &, bool const) -> Cx3;
+template auto TrajectoryN<2>::trim(Cx4 const &, bool const) -> Cx4;
+template auto TrajectoryN<2>::trim(Cx5 const &, bool const) -> Cx5;
 
-template auto TrajectoryN<3>::trim(Cx3CMap const) -> Cx3;
-template auto TrajectoryN<3>::trim(Cx4CMap const) -> Cx4;
-template auto TrajectoryN<3>::trim(Cx5CMap const) -> Cx5;
+template auto TrajectoryN<3>::trim(Cx3CMap, bool const) -> Cx3;
+template auto TrajectoryN<3>::trim(Cx4CMap, bool const) -> Cx4;
+template auto TrajectoryN<3>::trim(Cx5CMap, bool const) -> Cx5;
 
-template auto TrajectoryN<3>::trim(Cx3 const &) -> Cx3;
-template auto TrajectoryN<3>::trim(Cx4 const &) -> Cx4;
-template auto TrajectoryN<3>::trim(Cx5 const &) -> Cx5;
+template auto TrajectoryN<3>::trim(Cx3 const &, bool const) -> Cx3;
+template auto TrajectoryN<3>::trim(Cx4 const &, bool const) -> Cx4;
+template auto TrajectoryN<3>::trim(Cx5 const &, bool const) -> Cx5;
 
 } // namespace rl

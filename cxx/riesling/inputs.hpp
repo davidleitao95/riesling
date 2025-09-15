@@ -4,9 +4,10 @@
 
 #include "rl/algo/admm.hpp"
 #include "rl/algo/lsmr.hpp"
+#include "rl/algo/pdhg.hpp"
 #include "rl/op/grid-opts.hpp"
 #include "rl/op/recon-opts.hpp"
-#include "rl/precon.hpp"
+#include "rl/precon-opts.hpp"
 #include "rl/sense/sense.hpp"
 #include "rl/trajectory.hpp"
 #include "rl/types.hpp"
@@ -18,9 +19,9 @@
 template <int ND> struct CoreArgs
 {
   args::Positional<std::string> iname, oname;
+  args::ValueFlag<std::string>  dset, basisFile;
   SzFlag<ND>                    matrix;
-  args::ValueFlag<std::string>  basisFile;
-
+  args::Flag                    residual;
   CoreArgs(args::Subparser &parser);
 };
 
@@ -28,6 +29,8 @@ template <int ND> struct GridArgs
 {
   ArrayFlag<float, ND>   fov;
   args::ValueFlag<float> osamp;
+  args::Flag             tophat;
+  args::ValueFlag<Index> kW;
 
   GridArgs(args::Subparser &parser);
   auto Get() -> rl::GridOpts<ND>;
@@ -62,6 +65,16 @@ struct LSMRArgs
   auto Get() -> rl::LSMR::Opts;
 };
 
+struct PDHGArgs
+{
+  args::Flag             adaptive, lad;
+  args::ValueFlag<Index> its;
+  args::ValueFlag<float> tol, λE;
+
+  PDHGArgs(args::Subparser &parser);
+  auto Get() -> rl::PDHG::Opts;
+};
+
 struct ADMMArgs
 {
   args::ValueFlag<Index> in_its0;
@@ -83,13 +96,14 @@ struct ADMMArgs
   auto Get() -> rl::ADMM::Opts;
 };
 
-template <int ND>
-struct SENSEArgs
+template <int ND> struct SENSEArgs
 {
   args::ValueFlag<std::string> type;
-  args::ValueFlag<Index>       tp, kWidth;
-  ArrayFlag<float, ND>          res;
+  args::ValueFlag<Index>       tp, kWidth, its;
+  ArrayFlag<float, ND>         res;
   args::ValueFlag<float>       l, λ;
+
+  args::MapFlag<std::string, rl::SENSE::Normalization> renorm;
 
   SENSEArgs(args::Subparser &parser);
   auto Get() -> rl::SENSE::Opts<ND>;

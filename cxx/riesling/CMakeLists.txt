@@ -6,12 +6,12 @@ if(BUILD_BIN)
         main.cpp
         ../args.cpp
         inputs.cpp
-        outputs.cpp
         regularizers.cpp
 
         basis/blend.cpp
         basis/bernstein.cpp
         basis/concat.cpp
+        basis/decay.cpp
         basis/echoes.cpp
         basis/fourier.cpp
         basis/img.cpp
@@ -27,6 +27,7 @@ if(BUILD_BIN)
         data/diff.cpp
         data/merge.cpp
         data/move.cpp
+        data/norm.cpp
         data/nii.cpp
         data/noisify.cpp
         data/real.cpp
@@ -44,10 +45,7 @@ if(BUILD_BIN)
         op/rss.cpp
         op/wavelets.cpp
 
-        # recon/lad.cpp
         recon/lsq.cpp
-        # recon/pdhg.cpp
-        # recon/pdhg-setup.cpp
         recon/rlsq.cpp
         recon/rss.cpp
         # recon/sake.cpp
@@ -56,18 +54,18 @@ if(BUILD_BIN)
         sense/maps.cpp
         sense/sim.cpp
 
-        util/autofocus.cpp
+        # util/autofocus.cpp
         util/denoise.cpp
         util/downsamp.cpp
-        # util/eig.cpp
+        util/eig.cpp
         util/log.cpp
         util/filter.cpp
-        util/mask.cpp
+        util/mask.cpp        
         util/phantom.cpp
         util/precon.cpp
         util/psf.cpp
         util/resamp.cpp
-        # util/rovir.cpp
+        util/rovir.cpp
         util/version.cpp
     )
     target_link_libraries(riesling PRIVATE

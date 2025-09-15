@@ -1,7 +1,7 @@
 #include "inputs.hpp"
-#include "outputs.hpp"
 
 #include "rl/algo/lsmr.hpp"
+#include "rl/log/debug.hpp"
 #include "rl/log/log.hpp"
 #include "rl/op/pad.hpp"
 #include "rl/op/recon.hpp"
@@ -29,15 +29,14 @@ template <int ND> void run_lsq(args::Subparser &parser)
   HD5::Reader     reader(coreArgs.iname.Get());
   Info const      info = reader.readStruct<Info>(HD5::Keys::Info);
   TrajectoryN<ND> traj(reader, info.voxel_size.head<ND>(), coreArgs.matrix.Get());
-  auto            noncart = reader.readTensor<Cx5>();
+  auto            noncart = reader.readTensor<Cx5>(coreArgs.dset.Get());
   traj.checkDims(FirstN<3>(noncart.dimensions()));
 
   auto const basis = LoadBasis(coreArgs.basisFile.Get());
   auto const R = f0Args.Nτ ? Recon(reconArgs.Get(), preArgs.Get(), gridArgs.Get(), senseArgs.Get(), traj, f0Args.Get(), noncart,
                                    reader.readTensor<Re3>("f0map"))
                            : Recon(reconArgs.Get(), preArgs.Get(), gridArgs.Get(), senseArgs.Get(), traj, basis.get(), noncart);
-  Log::Debug(cmd, "A {} {} M {}", R.A->ishape, R.A->oshape, R.M->ishape);
-  auto debug = [shape = R.A->ishape, d = debugIters.Get()](Index const i, LSMR::Vector const &x) {
+  auto       debug = [shape = R.A->ishape, d = debugIters.Get()](Index const i, LSMR::Vector const &x) {
     if (i % d == 0) { Log::Tensor(fmt::format("lsmr-x-{:02d}", i), shape, x.data(), HD5::Dims::Images); }
   };
   LSMR lsmr{R.A, R.M, nullptr, lsqArgs.Get(), debug};
@@ -45,10 +44,21 @@ template <int ND> void run_lsq(args::Subparser &parser)
   auto const x = lsmr.run(CollapseToConstVector(noncart));
   auto const xm = AsTensorMap(x, R.A->ishape);
 
-  TOps::Pad<Cx, 5> oc(Concatenate(traj.matrixForFOV(cropFov.Get()), LastN<5 - ND>(R.A->ishape)), R.A->ishape);
-  auto             out = oc.adjoint(xm);
-
-  WriteOutput<5>(cmd, coreArgs.oname.Get(), out, HD5::Dims::Images, info);
+  TOps::Pad<5> oc(Concatenate(traj.matrixForFOV(cropFov.Get()), LastN<5 - ND>(R.A->ishape)), R.A->ishape);
+  auto         out = oc.adjoint(xm);
+  if (basis) { basis->applyR(out); }
+  HD5::Writer writer(coreArgs.oname.Get());
+  writer.writeStruct(HD5::Keys::Info, info);
+  writer.writeTensor(HD5::Keys::Data, out.dimensions(), out.data(), HD5::Dims::Images);
+  if (coreArgs.residual) {
+    Log::Print(cmd, "Calculating K-space residual");
+    fmt::print("|xm| {} |noncart| {}\n", Norm<true>(xm), Norm<true>(noncart));
+    noncart -= R.A->forward(xm);
+    fmt::print("|xm| {} |noncart| {}\n", Norm<true>(xm), Norm<true>(noncart));
+    writer.writeTensor(HD5::Keys::Residual, noncart.dimensions(), noncart.data(), HD5::Dims::Noncartesian);
+    traj.write(writer);
+  }
+  if (Log::Saved().size()) { writer.writeStrings("log", Log::Saved()); }
   Log::Print(cmd, "Finished");
 }
 

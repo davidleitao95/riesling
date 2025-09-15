@@ -1,7 +1,7 @@
 #include "log.hpp"
 
-#include "fmt/chrono.h"
 #include "debug.hpp"
+#include "fmt/chrono.h"
 
 #include <mutex>
 #include <stdio.h>
@@ -11,9 +11,9 @@ namespace rl {
 namespace Log {
 
 namespace {
-Display                      displayLevel = Display::None;
-std::mutex                   logMutex;
-std::vector<std::string>     savedEntries;
+Display                  displayLevel = Display::None;
+std::mutex               logMutex;
+std::vector<std::string> savedEntries;
 
 auto TheTime() -> std::string
 {
@@ -29,12 +29,14 @@ void SetDisplayLevel(Display const l)
   if (displayLevel == Display::Ephemeral) { fmt::print(stderr, "\n"); }
 }
 
+auto IsHigh() -> bool { return displayLevel == Display::High; }
+
 auto FormatEntry(std::string const &category, fmt::string_view fmt, fmt::format_args args) -> std::string
 {
   return fmt::format("[{}] [{:<6}] {}", TheTime(), category, fmt::vformat(fmt, args));
 }
 
-void SaveEntry(std::string const &s, fmt::terminal_color const color, Display const level)
+void SaveEntry(std::string const &s, fmt::text_style const style, Display const level)
 {
   {
     std::scoped_lock lock(logMutex);
@@ -42,7 +44,7 @@ void SaveEntry(std::string const &s, fmt::terminal_color const color, Display co
   }
   if (displayLevel >= level) {
     if (displayLevel == Display::Ephemeral) { fmt::print(stderr, "\033[A\33[2K\r"); }
-    fmt::print(stderr, fmt::fg(color), "{}\n", s);
+    fmt::print(stderr, style, "{}\n", s);
   }
 }
 

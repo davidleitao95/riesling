@@ -6,8 +6,8 @@
 
 namespace rl {
 
-template <int ND, typename Op> auto Loopify(typename Op::Ptr op, Index const nS, Index const nTime)
-  -> TOps::TOp<typename Op::Scalar, 6, 5>::Ptr
+template <int ND> auto Loopify(typename TOps::TOp<ND + 2, 3>::Ptr op, Index const nS, Index const nTime)
+  -> TOps::TOp<6, 5>::Ptr
 {
   if constexpr (ND == 2) {
     auto sliceLoop = TOps::MakeLoop<2, 3>(op, nS);
@@ -16,7 +16,7 @@ template <int ND, typename Op> auto Loopify(typename Op::Ptr op, Index const nS,
   } else {
     if (nS == 1) {
       auto reshape = TOps::MakeReshapeOutput(op, AddBack(op->oshape, 1));
-      auto timeLoop = TOps::MakeLoop<4, 4>(reshape, nTime);
+      auto timeLoop = TOps::MakeLoop<5, 4>(reshape, nTime);
       return timeLoop;
     } else {
       throw(Log::Failure("Loopify", "Not currently supported slabs {} time {}", nS, nTime));

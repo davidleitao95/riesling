@@ -9,9 +9,9 @@ namespace rl::TOps {
 /*
  * This represents Op2 * Op1
  */
-template <typename Op1, typename Op2> struct Compose final : TOp<typename Op1::Scalar, Op1::InRank, Op2::OutRank>
+template <typename Op1, typename Op2> struct Compose final : TOp<Op1::InRank, Op2::OutRank>
 {
-  TOP_INHERIT(typename Op1::Scalar, Op1::InRank, Op2::OutRank)
+  TOP_INHERIT(Op1::InRank, Op2::OutRank)
 
   Compose(std::shared_ptr<Op1> op1, std::shared_ptr<Op2> op2)
     : Parent(fmt::format("{}+{}", op1->name, op2->name), op1->ishape, op2->oshape)
@@ -29,10 +29,10 @@ template <typename Op1, typename Op2> struct Compose final : TOp<typename Op1::S
   using Parent::forward;
   using Ptr = std::shared_ptr<Compose>;
 
-  auto forward(InTensor const &x) const -> OutTensor { return op2_->forward(op1_->forward(x)); }
-  auto adjoint(OutTensor const &y) const -> InTensor { return op1_->adjoint(op2_->adjoint(y)); }
+  auto forward(InTensor const &x, float const s = 1.f) const -> OutTensor { return op2_->forward(op1_->forward(x, s)); }
+  auto adjoint(OutTensor const &y, float const s = 1.f) const -> InTensor { return op1_->adjoint(op2_->adjoint(y, s)); }
 
-  void forward(InCMap const x, OutMap y) const
+  void forward(InCMap x, OutMap y, float const s = 1.f) const
   {
     assert(x.dimensions() == op1_->ishape);
     assert(y.dimensions() == op2_->oshape);
@@ -41,11 +41,11 @@ template <typename Op1, typename Op2> struct Compose final : TOp<typename Op1::S
     typename Op1::OutCMap   tcm(temp.data(), op1_->oshape);
     auto const              time = this->startForward(x, y, false);
     op1_->forward(x, tm);
-    op2_->forward(tcm, y);
+    op2_->forward(tcm, y, s);
     this->finishForward(y, time, false);
   }
 
-  void adjoint(OutCMap const y, InMap x) const
+  void adjoint(OutCMap y, InMap x, float const s = 1.f) const
   {
     assert(x.dimensions() == op1_->ishape);
     assert(y.dimensions() == op2_->oshape);
@@ -54,11 +54,11 @@ template <typename Op1, typename Op2> struct Compose final : TOp<typename Op1::S
     typename Op1::OutCMap   tcm(temp.data(), op1_->oshape);
     auto const              time = this->startAdjoint(y, x, false);
     op2_->adjoint(y, tm);
-    op1_->adjoint(tcm, x);
+    op1_->adjoint(tcm, x, s);
     this->finishAdjoint(x, time, false);
   }
 
-  void iforward(InCMap const x, OutMap y) const
+  void iforward(InCMap x, OutMap y, float const s = 1.f) const
   {
     assert(x.dimensions() == op1_->ishape);
     assert(y.dimensions() == op2_->oshape);
@@ -67,11 +67,11 @@ template <typename Op1, typename Op2> struct Compose final : TOp<typename Op1::S
     typename Op1::OutCMap   tcm(temp.data(), op1_->oshape);
     auto const              time = this->startForward(x, y, true);
     op1_->forward(x, tm);
-    op2_->iforward(tcm, y);
+    op2_->iforward(tcm, y, s);
     this->finishForward(y, time, true);
   }
 
-  void iadjoint(OutCMap const y, InMap x) const
+  void iadjoint(OutCMap y, InMap x, float const s = 1.f) const
   {
     assert(x.dimensions() == op1_->ishape);
     assert(y.dimensions() == op2_->oshape);
@@ -80,7 +80,7 @@ template <typename Op1, typename Op2> struct Compose final : TOp<typename Op1::S
     typename Op1::OutCMap   tcm(temp.data(), op1_->oshape);
     auto const              time = this->startAdjoint(y, x, true);
     op2_->adjoint(y, tm);
-    op1_->iadjoint(tcm, x);
+    op1_->iadjoint(tcm, x, s);
     this->finishAdjoint(x, time, true);
   }
 
@@ -90,8 +90,8 @@ private:
 };
 
 /* Applies Op2 * Op1 * x */
-template <typename Op1, typename Op2>
-auto MakeCompose(std::shared_ptr<Op1> op1, std::shared_ptr<Op2> op2) -> Compose<Op1, Op2>::Ptr
+template <typename Op1, typename Op2> auto MakeCompose(std::shared_ptr<Op1> op1, std::shared_ptr<Op2> op2)
+  -> Compose<Op1, Op2>::Ptr
 {
   return std::make_shared<Compose<Op1, Op2>>(op1, op2);
 }

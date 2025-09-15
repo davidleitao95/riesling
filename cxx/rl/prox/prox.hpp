@@ -5,50 +5,58 @@
 
 namespace rl::Proxs {
 
-template <typename Scalar = Cx>
 struct Prox
 {
-  using Vector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+  using Vector = Eigen::Vector<Cx, Eigen::Dynamic>;
   using Map = typename Vector::AlignedMapType;
-  using CMap = typename Vector::ConstAlignedMapType;
-  using Op = Ops::Op<Scalar>;
+  using CMap = typename Eigen::Map<Vector const, Eigen::AlignedMax>;
   using Ptr = std::shared_ptr<Prox>;
 
   Prox(Index const sz);
 
-  auto apply(float const α, Vector const &x) const -> Vector;
-  auto apply(std::shared_ptr<Op> const α, Vector const &x) const -> Vector;
+  auto         apply(float const α, Vector const &x) const -> Vector;
+  void         apply(float const α, Vector const &x, Vector &z) const;
+  virtual void apply(float const α, CMap x, Map z) const = 0;
 
-  void apply(float const α, Vector const &x, Vector &z) const;
-  void apply(std::shared_ptr<Op> const α, Vector const &x, Vector &z) const;
+  auto         conj(float const α, Vector const &x) const -> Vector;
+  void         conj(float const α, Vector const &x, Vector &z) const;
+  virtual void conj(float const α, CMap x, Map z) const = 0;
 
-  virtual void apply(float const α, CMap const x, Map z) const = 0;
-  virtual void apply(std::shared_ptr<Op> const α, CMap const x, Map z) const;
-
-  virtual ~Prox(){};
+  virtual ~Prox() {};
 
   Index sz;
 };
 
-#define PROX_INHERIT(Scalar)                                                                                                   \
-  using Vector = typename Prox<Scalar>::Vector;                                                                                \
-  using Map = typename Prox<Scalar>::Map;                                                                                      \
-  using CMap = typename Prox<Scalar>::CMap;                                                                                    \
-  using Op = typename Prox<Scalar>::Op;                                                                                        \
-  using Prox<Scalar>::apply;
+#define PROX_INHERIT                                                                                                           \
+  using Vector = typename Prox::Vector;                                                                                        \
+  using Map = typename Prox::Map;                                                                                              \
+  using CMap = typename Prox::CMap;                                                                                            \
+  using Ptr = Prox::Ptr;                                                                                                       \
+  using Prox::apply;                                                                                                           \
+  using Prox::conj;
 
-template <typename Scalar = Cx>
-struct ConjugateProx final : Prox<Scalar>
+struct Conjugate final : Prox
 {
-  PROX_INHERIT(Scalar)
+  PROX_INHERIT
+  static auto Make(Prox::Ptr p) -> Prox::Ptr;
+  Conjugate(Prox::Ptr p);
 
-  ConjugateProx(std::shared_ptr<Prox<Scalar>> p);
-
-  void apply(float const α, CMap const x, Map z) const;
-  void apply(std::shared_ptr<Op> const α, CMap const x, Map z) const;
+  void apply(float const α, CMap x, Map z) const;
+  void conj(float const α, CMap x, Map z) const;
 
 private:
-  std::shared_ptr<Prox<Scalar>> p;
+  Prox::Ptr p;
+};
+
+/* The Proximal Operator for f(x) = 0, which comes up in PDHG */
+struct Null final : Prox
+{
+  PROX_INHERIT
+  static auto Make(Index const sz) -> Prox::Ptr;
+  Null(Index const sz);
+
+  void apply(float const α, CMap x, Map z) const;
+  void conj(float const α, CMap x, Map z) const;
 };
 
 } // namespace rl::Proxs

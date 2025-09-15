@@ -2,7 +2,6 @@
 
 #include "../op/ops.hpp"
 #include <functional>
-#include <span>
 
 namespace rl {
 /* Based on https://github.com/PythonOptimizers/pykrylov/blob/master/pykrylov/lls/lsmr.py
@@ -13,7 +12,7 @@ namespace rl {
  */
 struct LSMR
 {
-  using Op = Ops::Op<Cx>;
+  using Op = Ops::Op;
   using Vector = typename Op::Vector;
   using Map = typename Op::Map;
   using CMap = typename Op::CMap;
@@ -36,7 +35,7 @@ struct LSMR
   DbgFunc debug = nullptr;
 
   auto run(Vector const &b, Vector const &x0 = Vector()) const -> Vector;
-  auto run(CMap const b, CMap x0 = CMap(nullptr, 0)) const -> Vector;
+  auto run(CMap b, CMap x0 = CMap(nullptr, 0)) const -> Vector;
 };
 
 } // namespace rl

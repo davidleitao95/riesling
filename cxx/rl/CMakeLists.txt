@@ -8,7 +8,6 @@ find_package(NIFTI CONFIG REQUIRED)
 find_package(scn CONFIG REQUIRED)
 
 set(SRC_FILES
-apodize.cpp
 colors.cpp
 compressor.cpp
 fft.cpp
@@ -22,20 +21,19 @@ trajectory.cpp
 
 algo/admm.cpp
 algo/bidiag.cpp
+# algo/cg.cpp
 algo/decomp.cpp
 algo/eig.cpp
 algo/gs.cpp
 algo/iter.cpp
-algo/lad.cpp
 algo/lsmr.cpp
 algo/lsqr.cpp
 algo/otsu.cpp
-# algo/pdhg.cpp
+algo/pdhg.cpp
 algo/stats.cpp
 
 basis/basis.cpp
 basis/bernstein.cpp
-basis/fourier.cpp
 basis/svd.cpp
 
 func/dict.cpp
@@ -49,12 +47,14 @@ io/writer.cpp
 log/log.cpp
 log/debug.cpp
 
+op/apodize.cpp
 op/f0.cpp
 op/fft.cpp
 op/grad.cpp
 op/grid.cpp
 op/grid-decant.cpp
-op/hankel.cpp
+# op/hankel.cpp
+op/laplacian.cpp
 op/mask.cpp
 # op/ndft.cpp
 op/nufft.cpp
@@ -64,7 +64,6 @@ op/op.cpp
 op/ops.cpp
 op/pad.cpp
 op/recon.cpp
-# op/recon2.cpp
 op/reshape.cpp
 op/sense.cpp
 op/top-id.cpp
@@ -76,18 +75,14 @@ phantom/sphere.cpp
 phantom/shepp-logan.cpp
 phantom/radial.cpp
 
-prox/entropy.cpp
-prox/hermitian.cpp
 prox/l1-wavelets.cpp
-# prox/lsq.cpp
 prox/llr.cpp
 prox/norms.cpp
 prox/prox.cpp
-prox/slr.cpp
+# prox/slr.cpp
 prox/stack.cpp
 
 sense/coils.cpp
-# sense/espirit.cpp
 sense/sense.cpp
 
 sim/ir.cpp
@@ -103,7 +98,6 @@ sys/threads.cpp
 set(HDR_FILES
 types.hpp
 
-apodize.hpp
 colors.hpp
 compressor.hpp
 fft.hpp
@@ -119,20 +113,19 @@ trajectory.hpp
 
 algo/admm.hpp
 algo/bidiag.hpp
+algo/cg.hpp
 algo/decomp.hpp
 algo/eig.hpp
 algo/gs.hpp
 algo/iter.hpp
-algo/lad.hpp
 algo/lsmr.hpp
 algo/lsqr.hpp
 algo/otsu.hpp
-# algo/pdhg.hpp
+algo/pdhg.hpp
 algo/stats.hpp
 
 basis/basis.hpp
 basis/bernstein.hpp
-basis/fourier.hpp
 basis/svd.hpp
 
 func/dict.hpp
@@ -146,6 +139,7 @@ io/writer.hpp
 log/log.hpp
 log/debug.hpp
 
+op/apodize.hpp
 op/f0.hpp
 op/fft.hpp
 op/grad.hpp
@@ -168,7 +162,6 @@ phantom/gradcubes.hpp
 phantom/sphere.hpp
 phantom/shepp-logan.hpp
 
-prox/entropy.hpp
 prox/hermitian.hpp
 prox/l1-wavelets.hpp
 # prox/lsq.hpp

@@ -12,13 +12,13 @@ struct RegOpts
 {
   RegOpts(args::Subparser &parser);
 
-  args::ValueFlag<float> l1;
-  args::ValueFlag<float> nmrent;
-
-  args::ValueFlag<int>   diffOrder;
-  args::ValueFlag<float> tv;
-  args::ValueFlag<float> tgv;
   args::ValueFlag<std::string> iso;
+
+  args::ValueFlag<float> l1;
+  args::ValueFlag<float> l1i;
+  args::ValueFlag<float> tv;
+  args::ValueFlag<float> tv2;
+  args::ValueFlag<float> tgv;
   args::ValueFlag<float> tvt;
 
   args::ValueFlag<float> llr;
@@ -34,10 +34,10 @@ struct RegOpts
 struct Regularizers_t
 {
   std::vector<Regularizer> regs;
-  Ops::Op<Cx>::Ptr         A;
-  Ops::Op<Cx>::Ptr         ext_x;
+  Ops::Op::Ptr             A;
+  Ops::Op::Ptr             ext_x;
 };
 
-auto Regularizers(RegOpts &regOpts, TOps::TOp<Cx, 5, 5>::Ptr const &A) -> Regularizers_t;
+auto Regularizers(RegOpts &regOpts, TOps::TOp<5, 5>::Ptr const &A) -> Regularizers_t;
 
 } // namespace rl

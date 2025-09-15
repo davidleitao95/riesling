@@ -17,13 +17,13 @@ namespace {
 
 template <int ND>
 auto Single(GridOpts<ND> const &gridOpts, TrajectoryN<ND> const &traj, Index const nSlab, Index const nTime, Basis::CPtr b)
-  -> TOps::TOp<Cx, 5, 5>::Ptr
+  -> TOps::TOp<5, 5>::Ptr
 {
-  auto nufft = TOps::NUFFT<ND>::Make(gridOpts, traj, 1, b);
+  auto nufft = TOps::MakeNUFFT<ND>(gridOpts, traj, 1, b);
   if constexpr (ND == 2) {
-    auto                     ri = TOps::MakeReshapeInput(nufft, Concatenate(FirstN<2>(nufft->ishape), LastN<1>(nufft->ishape)));
-    TOps::TOp<Cx, 4, 4>::Ptr sliceLoop = TOps::MakeLoop<2, 3>(ri, nSlab);
-    TOps::TOp<Cx, 5, 5>::Ptr timeLoop = TOps::MakeLoop<4, 4>(sliceLoop, nTime);
+    auto                 ri = TOps::MakeReshapeInput(nufft, Concatenate(FirstN<2>(nufft->ishape), LastN<1>(nufft->ishape)));
+    TOps::TOp<4, 4>::Ptr sliceLoop = TOps::MakeLoop<2, 3>(ri, nSlab);
+    TOps::TOp<5, 5>::Ptr timeLoop = TOps::MakeLoop<4, 4>(sliceLoop, nTime);
     return timeLoop;
   } else {
     if (nSlab > 1) { throw Log::Failure("Recon", "Multislab and 1 channel not supported right now"); }
@@ -36,7 +36,7 @@ auto Single(GridOpts<ND> const &gridOpts, TrajectoryN<ND> const &traj, Index con
 
 auto LowmemSENSE(
   GridOpts<3> const &gridOpts, Trajectory const &traj, Index const nSlab, Index const nTime, Basis::CPtr b, Cx5 const &skern)
-  -> TOps::TOp<Cx, 5, 5>::Ptr
+  -> TOps::TOp<5, 5>::Ptr
 {
   auto nufft = TOps::NUFFTLowmem<3>::Make(gridOpts, traj, skern, b);
   if (nSlab > 1) {
@@ -49,7 +49,7 @@ auto LowmemSENSE(
 
 auto Decant(
   GridOpts<3> const &gridOpts, Trajectory const &traj, Index const nSlab, Index const nTime, Basis::CPtr b, Cx5 const &skern)
-  -> TOps::TOp<Cx, 5, 5>::Ptr
+  -> TOps::TOp<5, 5>::Ptr
 {
   auto nufft = TOps::NUFFTDecant<3>::Make(gridOpts, traj, skern, b);
   if (nSlab > 1) {
@@ -75,6 +75,7 @@ template <int ND> Recon<ND>::Recon(ReconOpts const       &rOpts,
   Index const nTime = noncart.dimension(4);
   if (nChan == 1) {
     A = Single(gridOpts, traj, nSlab, nTime, b);
+    M = MakeKSpacePrecon(pOpts, gridOpts, traj, 1, Sz2{nSlab, nTime});
   } else {
     auto const skern = SENSE::Choose(senseOpts, gridOpts, traj, noncart);
     if (rOpts.decant) {
@@ -94,7 +95,7 @@ template <int ND> Recon<ND>::Recon(ReconOpts const       &rOpts,
     } else {
       auto sense =
         TOps::MakeSENSE(SENSE::KernelsToMaps<ND>(skern, traj.matrixForFOV(gridOpts.fov), gridOpts.osamp), b ? b->nB() : 1);
-      auto nufft = TOps::NUFFT<ND>::Make(gridOpts, traj, skern.dimension(3), b);
+      auto nufft = TOps::MakeNUFFT(gridOpts, traj, sense->nChannels(), b);
       if constexpr (ND == 2) {
         auto slices = TOps::MakeLoop<2, 3>(nufft, nSlab);
         auto ss = TOps::MakeCompose(sense, slices);
@@ -137,7 +138,7 @@ template <int ND> Recon<ND>::Recon(ReconOpts const       &rOpts,
   auto        b = F->basis();
   auto        S = TOps::MakeSENSE(SENSE::KernelsToMaps<ND>(skern, traj.matrixForFOV(gridOpts.fov), gridOpts.osamp), b->nB());
   auto        SF = TOps::MakeCompose(F, S);
-  auto        N = TOps::NUFFT<ND>::Make(gridOpts, traj, S->nChannels(), b);
+  auto        N = TOps::MakeNUFFT<ND>(gridOpts, traj, S->nChannels(), b);
   if constexpr (ND == 2) {
     auto NL = TOps::MakeLoop<2, 3>(N, nSlice);
     auto NLSF = TOps::MakeCompose(SF, NL);

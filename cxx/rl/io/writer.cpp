@@ -10,6 +10,12 @@
 namespace rl {
 namespace HD5 {
 
+namespace {
+Index deflate = 2;
+}
+
+void SetDeflate(Index d) { deflate = d; }
+
 Writer::Writer(std::string const &fname, bool const append)
 {
   Init();
@@ -23,7 +29,7 @@ Writer::Writer(std::string const &fname, bool const append)
   if (handle_ < 0) {
     throw Log::Failure("HD5", "Could not open file {} for writing because: {}", fname, GetError());
   } else {
-    Log::Print("HD5", "Writing {} id {}", fname, handle_);
+    Log::Print("HD5", "Opened {} for writing id {}", fname, handle_);
   }
 }
 
@@ -58,7 +64,7 @@ void Writer::writeStrings(std::string const &label, std::vector<std::string> con
   H5Tset_size(tid, H5T_VARIABLE);
   H5Tset_cset(tid, H5T_CSET_UTF8);
   std::vector<char const *> ptrs(strings.size());
-  for (Index ii = 0; ii < strings.size(); ii++) {
+  for (size_t ii = 0; ii < strings.size(); ii++) {
     ptrs[ii] = strings[ii].c_str();
   }
   hid_t const dset = H5Dcreate(handle_, label.c_str(), tid, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
@@ -143,8 +149,10 @@ void Writer::writeTensor(std::string const &name, Shape<N> const &shape, Scalar 
 
   auto const space = H5Screate_simple(N, ds_dims, NULL);
   auto const plist = H5Pcreate(H5P_DATASET_CREATE);
-  CheckedCall(H5Pset_deflate(plist, 2), "setting deflate");
   CheckedCall(H5Pset_chunk(plist, N, chunk_dims), "setting chunk");
+  if (deflate > 0) {
+    CheckedCall(H5Pset_deflate(plist, deflate), "setting deflate");
+  }
 
   hid_t const tid = type<Scalar>();
   hid_t const dset = H5Dcreate(handle_, name.c_str(), tid, space, H5P_DEFAULT, plist, H5P_DEFAULT);

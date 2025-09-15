@@ -26,7 +26,7 @@ auto ScaleImages(std::string const &type, Cx5 const &xx) -> float
   } else if (type == "otsu") {
     Eigen::ArrayXf const x = CollapseToConstVector(xx).array().abs();
     auto const masked = OtsuMask(x);
-    float const med = Percentiles(masked, {0.5}).front();
+    float const med = Percentiles(CollapseToArray(masked), {0.5}).front();
     scale = 1.f / med;
     Log::Print("Scale", "Otsu + median scaling = {}", scale);
   } else {
@@ -40,7 +40,7 @@ auto ScaleImages(std::string const &type, Cx5 const &xx) -> float
   return scale;
 }
 
-auto ScaleData(std::string const &type, Ops::Op<Cx>::Ptr const A, Ops::Op<Cx>::Ptr const P, Ops::Op<Cx>::Map const b) -> float
+auto ScaleData(std::string const &type, Ops::Op::Ptr const A, Ops::Op::Ptr const P, Ops::Op::Map const b) -> float
 {
   float scale;
   if (type == "none") {
@@ -58,7 +58,7 @@ auto ScaleData(std::string const &type, Ops::Op<Cx>::Ptr const A, Ops::Op<Cx>::P
     LSMR                 lsmr{A, P, nullptr, {2}};
     Eigen::ArrayXf const x = lsmr.run(b).array().abs();
     auto const masked = OtsuMask(x);
-    float const med = Percentiles(masked, {0.5}).front();
+    float const med = Percentiles(CollapseToArray(masked), {0.5}).front();
     scale = 1.f / med;
     Log::Print("Scale", "Otsu + median scaling = {}", scale);
   } else {

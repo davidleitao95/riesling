@@ -1,5 +1,6 @@
 #include "inputs.hpp"
 
+#include "rl/algo/eig.hpp"
 #include "rl/algo/lsmr.hpp"
 #include "rl/io/hd5.hpp"
 #include "rl/log/log.hpp"
@@ -18,8 +19,9 @@ template <int ND> void run_nufft(args::Subparser &parser)
   PreconArgs   preArgs(parser);
   LSMRArgs     lsqOpts(parser);
 
-  args::Flag fwd(parser, "", "Apply forward operator", {'f', "fwd"});
-  args::Flag adj(parser, "", "Apply adjoint operator", {'a', "adj"});
+  args::Flag fwd(parser, "F", "Apply forward operator", {'f', "fwd"});
+  args::Flag adj(parser, "A", "Apply adjoint operator", {'a', "adj"});
+  args::Flag eig(parser, "E", "Estimate eigenvalue & vector", {'e', "eig"});
 
   ParseCommand(parser, coreArgs.iname, coreArgs.oname);
   auto const  cmd = parser.GetCommand().Name();
@@ -34,7 +36,17 @@ template <int ND> void run_nufft(args::Subparser &parser)
   writer.writeStruct(HD5::Keys::Info, reader.readStruct<Info>(HD5::Keys::Info));
   traj.write(writer);
 
-  if (fwd) {
+  if (eig) {
+    auto const nufft = TOps::MakeNUFFT<ND>(gridArgs.Get(), traj, 1, basis.get());
+    auto const M = MakeKSpacePrecon(preArgs.Get(), gridArgs.Get(), traj, 1, Sz2{1, 1});
+    auto const [val, vec] = PowerMethodForward(nufft, M, lsqOpts.its.Get());
+    if constexpr (ND == 2) {
+      writer.writeTensor("data", FirstN<ND + 1>(nufft->ishape), vec.data(), {"i", "j", "b"});
+    } else {
+      writer.writeTensor("data", FirstN<ND + 1>(nufft->ishape), vec.data(), {"i", "j", "k", "b"});
+    }
+    fmt::print("{}\n", val);
+  } else if (fwd) {
     auto const cart = reader.readTensor<Cx6>();
     Index      nS;
     if constexpr (ND == 2) {
@@ -42,10 +54,10 @@ template <int ND> void run_nufft(args::Subparser &parser)
     } else {
       nS = 1;
     }
-    auto const nC = shape[3];
+    auto const nC = shape[4];
     auto const nT = shape[5];
-    auto const nufft = TOps::NUFFT<ND>::Make(gridArgs.Get(), traj, nC, basis.get());
-    auto const A = Loopify<ND, TOps::NUFFT<ND>>(nufft, nS, nT);
+    auto const nufft = TOps::MakeNUFFT<ND>(gridArgs.Get(), traj, nC, basis.get());
+    auto const A = Loopify<ND>(nufft, nS, nT);
     auto const noncart = A->forward(cart);
     writer.writeTensor(HD5::Keys::Data, noncart.dimensions(), noncart.data(), HD5::Dims::Noncartesian);
   } else {
@@ -53,8 +65,8 @@ template <int ND> void run_nufft(args::Subparser &parser)
     auto const nC = shape[0];
     auto const nS = shape[3];
     auto const nT = shape[4];
-    auto const nufft = TOps::NUFFT<ND>::Make(gridArgs.Get(), traj, nC, basis.get());
-    auto const A = Loopify<ND, TOps::NUFFT<ND>>(nufft, nS, nT);
+    auto const nufft = TOps::MakeNUFFT<ND>(gridArgs.Get(), traj, nC, basis.get());
+    auto const A = Loopify<ND>(nufft, nS, nT);
     if (adj) {
       auto const cart = A->adjoint(noncart);
       writer.writeTensor(HD5::Keys::Data, cart.dimensions(), cart.data(), HD5::Dims::Channels);

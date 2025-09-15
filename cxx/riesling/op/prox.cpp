@@ -1,5 +1,4 @@
 #include "inputs.hpp"
-#include "outputs.hpp"
 
 #include "regularizers.hpp"
 #include "rl/op/top-id.hpp"
@@ -20,9 +19,9 @@ void main_prox(args::Subparser &parser)
   HD5::Writer output(oname.Get());
   output.writeStruct(HD5::Keys::Info, input.readStruct<Info>(HD5::Keys::Info));
   Cx5 const   x = input.readTensor<Cx5>();
-  auto        A = std::make_shared<TOps::Identity<Cx, 5>>(x.dimensions());
+  auto        A = std::make_shared<TOps::Identity<5>>(x.dimensions());
   auto [regs, B, ext_x] = Regularizers(regOpts, A);
-  Ops::Op<Cx>::Vector xx(B->cols());
+  Ops::Op::Vector xx(B->cols());
   xx.setZero();
   xx.head(A->rows()) = CollapseToConstVector(x);
   for (size_t ir = 0; ir < regs.size(); ir++) {
