@@ -60,10 +60,10 @@ end
 if ~keepInput
     fileNameIn = [tempname,'.h5'];
 else
-    %check if fileNameIn already exists, if so delete to replace
-    if exist(fileNameIn, 'file')
-        delete(fileNameIn);
-    end
+    % %check if fileNameIn already exists, if so delete to replace
+    % if exist(fileNameIn, 'file')
+    %     delete(fileNameIn);
+    % end
 end
 % [~,name] = fileparts(fileNameIn);
 
@@ -81,8 +81,10 @@ switch cmd
         else
             riesling_write(fileNameIn, data, traj, info, 'nufft-forward');
         end
-    case 'sense-maps'
-        fileNameIn = [];
+    case {'sense-maps','psf','denoise'}
+        if ~keepInput
+            fileNameIn = [];
+        end
 
     otherwise
         riesling_write(fileNameIn, data, traj, matrix, info, [], f0Map, t2Map);
