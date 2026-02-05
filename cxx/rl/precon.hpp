@@ -9,23 +9,25 @@
 namespace rl {
 
 template <int ND>
-auto KSpaceSingle(GridOpts<ND> const &gridOpts, TrajectoryN<ND> const &traj, float const max = 1.f, Basis::CPtr basis = nullptr)
+auto KSpaceSingle(GridOpts<ND> const &gridOpts, TrajectoryN<ND> const &traj, float const λ = 0.f, Basis::CPtr basis = nullptr)
   -> Re2;
 auto KSpaceMulti(Cx5 const         &smaps,
                  GridOpts<3> const &gridOpts,
                  Trajectory const  &traj,
-                 float const        max = 1.f,
+                 float const        λ = 1.f,
                  Basis::CPtr        basis = nullptr) -> Re3;
 
 template <int ND, int NB> auto MakeKSpacePrecon(PreconOpts const      &opts,
                                                 GridOpts<ND> const    &gridOpts,
                                                 TrajectoryN<ND> const &traj,
+                                                Basis::CPtr            basis,
                                                 Index const            nC,
                                                 Sz<NB> const           bshape) -> TOps::TOp<3 + NB>::Ptr;
 
 template <int ND, int NB> auto MakeKSpacePrecon(PreconOpts const      &opts,
                                                 GridOpts<ND> const    &gridOpts,
                                                 TrajectoryN<ND> const &traj,
+                                                Basis::CPtr            basis,
                                                 Cx5 const             &smaps,
                                                 Sz<NB> const           bshape) -> TOps::TOp<3 + NB, 3 + NB>::Ptr;
 

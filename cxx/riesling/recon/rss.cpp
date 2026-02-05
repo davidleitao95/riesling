@@ -32,12 +32,12 @@ void main_recon_rss(args::Subparser &parser)
 
   auto const nufft = TOps::MakeNUFFT<3>(gridArgs.Get(), traj, nC, basis.get());
   auto const A = Loopify<3>(nufft, nS, nT);
-  auto const M = MakeKSpacePrecon(preArgs.Get(), gridArgs.Get(), traj, nC, Sz2{nS, nT});
+  auto const M = MakeKSpacePrecon(preArgs.Get(), gridArgs.Get(), traj, basis.get(), nC, Sz2{nS, nT});
   LSMR const lsmr{A, M, nullptr, lsqOpts.Get()};
   auto       x = lsmr.run(CollapseToConstVector(noncart));
   auto       xm = AsTensorMap(x, A->ishape);
 
-  Cx5 const    rss = DimDot<3>(xm, xm).sqrt();
+  Cx5 const    rss = DimDot<4>(xm, xm).sqrt();
   TOps::Pad<5> oc(traj.matrixForFOV(cropFov.Get(), rss.dimension(3), nT), rss.dimensions());
   auto         out = oc.adjoint(rss);
   HD5::Writer writer(coreArgs.oname.Get());

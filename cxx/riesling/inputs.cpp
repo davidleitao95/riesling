@@ -49,12 +49,12 @@ ReconArgs::ReconArgs(args::Subparser &parser)
 auto ReconArgs::Get() -> rl::ReconOpts { return rl::ReconOpts{.decant = decant.Get(), .lowmem = lowmem.Get()}; }
 
 PreconArgs::PreconArgs(args::Subparser &parser)
-  : type(parser, "P", "Pre-conditioner (none/single/multi/filename)", {"precon", 'p'}, "single")
-  , max(parser, "M", "Maximum value, threshold above (1)", {"precon-max"}, 1.f)
+  : type(parser, "P", "Preconditioner (none/single/multi/filename)", {"precon", 'p'}, "single")
+  , λ(parser, "λ", "Preconditioner regularization (0)", {"precon-l"}, 0.f)
 {
 }
 
-auto PreconArgs::Get() -> rl::PreconOpts { return rl::PreconOpts{.type = type.Get(), .max = max.Get()}; }
+auto PreconArgs::Get() -> rl::PreconOpts { return rl::PreconOpts{.type = type.Get(), .λ = λ.Get()}; }
 
 LSMRArgs::LSMRArgs(args::Subparser &parser)
   : its(parser, "N", "Max iterations (4)", {"max-its", 'i'}, 4)
@@ -73,8 +73,8 @@ auto LSMRArgs::Get() -> rl::LSMR::Opts
 PDHGArgs::PDHGArgs(args::Subparser &parser)
   : adaptive(parser, "A", "Adaptive step sizes", {"adaptive"})
   , lad(parser, "L", "Least Absolute Deviations, PDHG only", {"lad", 'l'})
-  , its(parser, "N", "Max iterations (4)", {"max-its", 'i'}, 32)
-  , tol(parser, "B", "PDHG residual/Δ tolerance (1e-2)", {"pdhg-tol", 't'}, 1.e-2f)
+  , its(parser, "N", "Max iterations (4)", {"max-its", 'i'}, 128)
+  , tol(parser, "B", "PDHG residual/Δ tolerance (1e-2)", {"pdhg-tol", 't'}, 1.e-4f)
   , λE(parser, "λE", "Max Eigenvalue of encoding operator (1)", {"lambda-E", 'e'}, 1.f)
 {
 }
@@ -143,9 +143,10 @@ template struct SENSEArgs<2>;
 template struct SENSEArgs<3>;
 
 f0Args::f0Args(args::Subparser &parser)
-  : τacq(parser, "τ", "Total ACQ time", {"tacq"})
+  : τ0(parser, "τ", "ACQ start time", {"t0"})
+  , τacq(parser, "τ", "Total ACQ time", {"tacq"})
   , Nτ(parser, "N", "Number of timesteps for f0 correction", {"Nt"})
 {
 }
 
-auto f0Args::Get() -> rl::f0Opts { return rl::f0Opts{.τacq = τacq.Get(), .Nτ = Nτ.Get()}; }
+auto f0Args::Get() -> rl::f0Opts { return rl::f0Opts{.τ0 = τ0.Get(), .τacq = τacq.Get(), .Nτ = Nτ.Get()}; }

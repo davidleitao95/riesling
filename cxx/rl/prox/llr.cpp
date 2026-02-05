@@ -26,43 +26,40 @@ LLR::LLR(float const l, Index const p, Index const w, bool const doShift, Sz5 co
   Log::Print("LLR", "λ {} Scaled λ {} Patch {} Window {} M {} N {} Shape {}", l, λ, patchSize, windowSize, M, N, shape);
 }
 
-void LLR::apply(float const α, CMap xin, Map zin) const
+void LLR::apply(float const α, Map xin) const
 {
-  Cx5CMap     x(xin.data(), shape);
+  Cx5CMap x(xin.data(), shape);
   float const realλ = λ * α;
-  auto        softLLR = [realλ](Cx5 const &xp) -> Cx5 {
-    Eigen::MatrixXcf patch = CollapseToMatrix<Cx5, 3>(xp);
-    SVD<Cx> const    svd(patch);
+  auto        softLLR = [realλ](Cx5 const &xp, Cx5 &yp) {
+    auto const    xm = CollapseToConstMatrix<Cx5, 3>(xp);
+    auto          ym = CollapseToMatrix<Cx5, 3>(yp);
+    SVD<Cx> const svd(xm);
     // Soft-threhold svals
     Eigen::VectorXf const s = (svd.S.abs() > realλ).select(svd.S * (svd.S.abs() - realλ) / svd.S.abs(), 0.f);
-    patch = (svd.U * s.asDiagonal() * svd.V.adjoint());
-    Cx5 yp = AsTensorMap(patch, xp.dimensions());
-    return yp;
+    ym = (svd.U * s.asDiagonal() * svd.V.adjoint());
   };
   Cx5 z(shape);
+  z.setZero();
   Patches(patchSize, windowSize, shift, softLLR, x, z);
-  if (Log::IsHigh()) { Log::Debug("LLR", "α {} λ {} t {} |x| {} |z| {}", α, λ, realλ, Norm<true>(x), Norm<true>(z)); }
-  Cx5Map zm(zin.data(), shape);
-  zm.device(Threads::TensorDevice()) = z;
+  Log::Debug("LLR", "α {:4.3E} λ {:4.3E} t {:4.3E} |x| {:4.3E} |z| {:4.3E}", α, λ, realλ, Norm<true>(x), Norm<true>(z));
+  x.device(Threads::TensorDevice()) = z;
 }
 
-void LLR::conj(float const α, CMap xin, Map zin) const
+void LLR::conj(float const, Map xin) const
 {
   Cx5CMap x(xin.data(), shape);
   /* Amazingly, this doesn't depend on α. Maths is based. */
-  auto projLLR = [λ = this->λ](Cx5 const &xp) -> Cx5 {
-    Eigen::MatrixXcf      patch = CollapseToMatrix<Cx5, 3>(xp);
-    SVD<Cx> const         svd(patch);
+  auto projLLR = [λ = this->λ](Cx5 const &xp, Cx5 &yp) {
+    auto const            xm = CollapseToConstMatrix<Cx5, 3>(xp);
+    auto                  ym = CollapseToMatrix<Cx5, 3>(yp);
+    SVD<Cx> const         svd(xm);
     Eigen::VectorXf const s = (svd.S.abs() > λ).select(λ * svd.S / svd.S.abs(), svd.S);
-    patch = (svd.U * s.asDiagonal() * svd.V.adjoint());
-    Cx5 yp = AsTensorMap(patch, xp.dimensions());
-    return yp;
+    ym = (svd.U * s.asDiagonal() * svd.V.adjoint());
   };
   Cx5 z(shape);
   Patches(patchSize, windowSize, shift, projLLR, x, z);
-  if (Log::IsHigh()) { Log::Debug("LLR", "Conjugate λ {} |x| {} |z| {}", λ, Norm<true>(x), Norm<true>(z)); }
-  Cx5Map zm(zin.data(), shape);
-  zm.device(Threads::TensorDevice()) = z;
+  Log::Debug("LLR", "Conjugate λ {:4.3E} |x| {:4.3E} |z| {:4.3E}", λ, Norm<true>(x), Norm<true>(z));
+  x.device(Threads::TensorDevice()) = z;
 }
 
 } // namespace rl::Proxs

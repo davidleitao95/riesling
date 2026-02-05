@@ -30,11 +30,11 @@ GridDecant<ND, KF, SG>::GridDecant(GridOpts<ND> const &opts, TrajectoryN<ND> con
   auto const osMatrix = MulToEven(traj.matrixForFOV(opts.fov), opts.osamp);
   gridLists = traj.toCoordLists(osMatrix, kernel.FullWidth, SGSZ, false);
   ishape = AddBack(osMatrix, basis ? basis->nB() : 1);
-  oshape = Sz3{skern.dimension(4), traj.nSamples(), traj.nTraces()};
+  oshape = Sz3{skern.dimension(ND + 1), traj.nSamples(), traj.nTraces()};
   mutexes = std::vector<std::mutex>(osMatrix[ND - 1]);
-  float const scale = std::sqrt(Product(FirstN<3>(ishape)) / (float)Product(FirstN<3>(skern.dimensions())));
-  skern *= skern.constant(scale);
-  Log::Print(this->name, "ishape {} oshape {} scale {}", this->ishape, this->oshape, scale);
+  float const scale = Norm<false>(skern);
+  skern /= skern.constant(scale);
+  Log::Print(this->name, "ishape {} oshape {} kshape {} scale {}", this->ishape, this->oshape, skern.dimensions(), scale);
 }
 
 template <int ND, typename KF, int SG>
@@ -51,10 +51,11 @@ template <int ND, typename KF, int SG> void GridDecant<ND, KF, SG>::forwardTask(
   for (Index is = start; is < (Index)gridLists.size(); is += stride) {
     auto const &list = gridLists[is];
     auto const  corner = SubgridCorner<ND, SGSZ, KF::FullWidth>(list.corner);
+    sx.setZero();
     if (InBounds<ND, SGFW>(corner, FirstN<ND>(x.dimensions()), FirstN<ND>(skern.dimensions()))) {
-      GridToDecant<ND, SGFW>::Fast(corner, skern, x, sx);
+      DecantSubgrid<ND, SGFW>::FastForward(corner, skern, x, sx);
     } else {
-      GridToDecant<ND, SGFW>::Slow(corner, skern, x, sx);
+      DecantSubgrid<ND, SGFW>::SlowForward(corner, skern, x, sx);
     }
     for (auto const &m : list.coords) {
       typename KType::Tensor const k = kernel(m.offset) * s;
@@ -100,9 +101,9 @@ template <int ND, typename KF, int SG> void GridDecant<ND, KF, SG>::adjointTask(
     }
     auto const corner = SubgridCorner<ND, SGSZ, KF::FullWidth>(list.corner);
     if (InBounds<ND, SGFW>(corner, FirstN<ND>(x.dimensions()), FirstN<ND>(skern.dimensions()))) {
-      DecantToGrid<ND, SGFW>::Fast(mutexes, corner, skern, sx, x);
+      DecantSubgrid<ND, SGFW>::FastAdjoint(mutexes, corner, skern, sx, x);
     } else {
-      DecantToGrid<ND, SGFW>::Slow(mutexes, corner, skern, sx, x);
+      DecantSubgrid<ND, SGFW>::SlowAdjoint(mutexes, corner, skern, sx, x);
     }
   }
 }
@@ -123,6 +124,7 @@ template <int ND, typename KF, int SG> void GridDecant<ND, KF, SG>::iadjoint(Out
 }
 
 template struct GridDecant<1>;
+template struct GridDecant<1, ExpSemi<6>>;
 template struct GridDecant<2>;
 template struct GridDecant<3>;
 } // namespace TOps

@@ -16,7 +16,19 @@ template <int ND> auto MakeGrid(
   GridOpts<ND> const &gridOpts, TrajectoryN<ND> const &traj, Index const nC, Index const nS, Index const nT, Basis::CPtr basis)
   -> TOps::TOp<6, 5>::Ptr
 {
-  auto G = TOps::Grid<ND>::Make(gridOpts, traj, nC, basis);
+  typename TOps::TOp<ND + 2, 3>::Ptr G = nullptr;
+  if (gridOpts.tophat) {
+    G = TOps::Grid<ND, TopHat<1>>::Make(gridOpts, traj, nC, basis);
+  } else {
+    switch (gridOpts.kW) {
+      case 4: G = TOps::Grid<ND, ExpSemi<4>>::Make(gridOpts, traj, nC, basis); break;
+      case 6: G = TOps::Grid<ND, ExpSemi<6>>::Make(gridOpts, traj, nC, basis); break;
+      case 8: G = TOps::Grid<ND, ExpSemi<8>>::Make(gridOpts, traj, nC, basis); break;
+      default:
+        throw(Log::Failure("Grid", "Kernel width {} not supported", gridOpts.kW));
+    }
+  }
+
   if constexpr (ND == 2) {
     auto GS = TOps::MakeLoop<2, 3>(G, nS);
     auto GST = TOps::MakeLoop<5, 4>(GS, nT);
@@ -69,7 +81,7 @@ template <int ND> void run_grid(args::Subparser &parser)
   } else {
     auto const noncart = reader.readTensor<Cx5>();
     traj.checkDims(FirstN<3>(noncart.dimensions()));
-    auto const M = MakeKSpacePrecon(preArgs.Get(), gridArgs.Get(), traj, nC, Sz2{nS, nT});
+    auto const M = MakeKSpacePrecon(preArgs.Get(), gridArgs.Get(), traj, basis.get(), nC, Sz2{nS, nT});
     LSMR const lsmr{A, M, nullptr, lsqOpts.Get()};
     auto const c = lsmr.run(CollapseToConstVector(noncart));
     writer.writeTensor(HD5::Keys::Data, A->ishape, c.data(), HD5::Dims::Channels);

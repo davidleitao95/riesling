@@ -47,7 +47,7 @@ struct ReconArgs
 struct PreconArgs
 {
   args::ValueFlag<std::string> type;
-  args::ValueFlag<float>       max;
+  args::ValueFlag<float>       λ;
 
   PreconArgs(args::Subparser &parser);
   auto Get() -> rl::PreconOpts;
@@ -111,7 +111,7 @@ template <int ND> struct SENSEArgs
 
 struct f0Args
 {
-  args::ValueFlag<float> τacq;
+  args::ValueFlag<float> τ0, τacq;
   args::ValueFlag<Index> Nτ;
 
   f0Args(args::Subparser &parser);
